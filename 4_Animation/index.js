@@ -1,9 +1,9 @@
 // Vertex shader program
 const VSHADER_SOURCE = `
   attribute vec4 a_Position;
-  uniform mat4 u_xformMatrix;
+  uniform mat4 u_ModelMatrix;
   void main() {
-    gl_Position = a_Position * u_xformMatrix;
+    gl_Position = u_ModelMatrix * a_Position;
   }
 `
 
@@ -13,6 +13,9 @@ const FSHADER_SOURCE = `
     gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
   }
 `
+
+// Rotation angle (degrees/second)
+let ANGLE_STEP = 45.0
 
 function main () {
   // Retrieve <canvas> element
@@ -34,37 +37,28 @@ function main () {
     return
   }
 
-  // The rotation angle
-  const ANGLE = 120.0
-  // Create a rotation matrix
-  const radian = Math.PI * ANGLE / 180.0 // Convert to radians
-  const cosB = Math.cos(radian), sinB = Math.sin(radian)
-
-  // Note: WebGL is column major order
-  const xformMatrix = new Float32Array([
-    cosB, sinB, 0.0, 0.0,
-    -sinB, cosB, 0.0, 0.0,
-    0.0,  0.0, 1.0, 0.0,
-    0.0,  0.0, 0.0, 1.0
-  ])
-
-  // Pass the rotation matrix to the vertex shader
-  const u_xformMatrix = gl.getUniformLocation(gl.program, 'u_xformMatrix')
-  if (!u_xformMatrix) {
-    console.log('Failed to get the storage location of u_xformMatrix')
-    return
-  }
-
-  gl.uniformMatrix4fv(u_xformMatrix, false, xformMatrix)
-
   // Specify the color for clearing <canvas>
   gl.clearColor(0, 0, 0, 1)
 
-  // Clear <canvas>
-  gl.clear(gl.COLOR_BUFFER_BIT)
+  // Get storage location of u_ModelMatrix
+  const u_ModelMatrix = gl.getUniformLocation(gl.program, 'u_ModelMatrix')
+  if (!u_ModelMatrix) {
+    console.log('Failed to get the storage location of u_ModelMatrix')
+    return
+  }
 
-  // Draw the rectangle
-  gl.drawArrays(gl.TRIANGLES, 0, n)
+  // Current rotation angle
+  let currentAngle = 0.0
+  // Model matrix
+  const modelMatrix = new Matrix4()
+
+  // Start drawing
+  const tick = function () {
+    currentAngle = animate(currentAngle)  // Update the rotation angle
+    draw(gl, n, currentAngle, modelMatrix, u_ModelMatrix)   // Draw the triangle
+    requestAnimationFrame(tick, canvas)   // Request that the browser ?calls tick
+  }
+  tick()
 }
 
 function initVertexBuffers (gl) {
@@ -103,4 +97,41 @@ function initVertexBuffers (gl) {
   return n
 }
 
+function draw (gl, n, currentAngle, modelMatrix, u_ModelMatrix) {
+  // Set the rotation matrix
+  modelMatrix.setRotate(currentAngle, 0, 0, 1)
+  modelMatrix.translate(0.35, 0, 0)
+
+  // Pass the rotation matrix to the vertex shader
+  gl.uniformMatrix4fv(u_ModelMatrix, false, modelMatrix.elements)
+
+  // Clear <canvas>
+  gl.clear(gl.COLOR_BUFFER_BIT)
+
+  // Draw the rectangle
+  gl.drawArrays(gl.TRIANGLES, 0, n)
+}
+
+// Last time that this function was called
+let g_last = Date.now()
+function animate (angle) {
+  // Calculate the elapsed time
+  const now = Date.now()
+  let elapsed = now - g_last
+  g_last = now
+  // Update the current rotation angle (adjusted by the elapsed time)
+  let newAngle = angle + (ANGLE_STEP * elapsed) / 1000.0
+  return newAngle %= 360
+}
+
+function up () {
+  ANGLE_STEP += 10
+}
+
+function down () {
+  ANGLE_STEP -= 10
+}
+
 window.addEventListener('load', main)
+document.getElementById('up').addEventListener('click', up);
+document.getElementById('down').addEventListener('click', down);
